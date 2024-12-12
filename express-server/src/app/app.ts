@@ -5,6 +5,7 @@ import Database from '../db/init.mongo';
 import RedisInitializer from '../db/init.redis';
 import accessRouter from '../routes/access.router';
 import userRouter from '../routes/user.router';
+import recognitonRouter from '../routes/recogniton.router';
 import { handleErrorsMiddeleware } from '../middlewares/errorhandler.middleware';
 import { NotFoundRequestError } from '../core/error.response';
 import { Request, Response, NextFunction } from 'express';
@@ -32,6 +33,7 @@ class App {
 	private routes(): void {
 		this.app.use('/v1/api/', accessRouter);
 		this.app.use('/v1/api/users', userRouter);
+		this.app.use("/v1/api/recognition", recognitonRouter);
 	}
 
 	private plugins(): void {

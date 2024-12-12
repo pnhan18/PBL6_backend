@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+service SignLanguageRecognitionService {
+    // Nhận diện trên từng frame
+    rpc RecognizeSignLanguage (VideoFrame) returns (RecognitionResult);
+    
+    // Nhận và xử lý toàn bộ video
+    rpc UploadVideo (stream VideoChunk) returns (RecognitionFileResult);
+}
+
+// Message cho nhận diện từng frame
+message VideoFrame {
+    bytes data = 1;   // Dữ liệu frame (hình ảnh)
+    string client_id = 2; // ID của client
+}
+
+// Kết quả nhận diện từng frame
+message RecognitionResult {
+    string result = 1;  // Kết quả nhận diện
+    string client_id = 2; // ID của client
+}
+
+// Chunk video được gửi qua stream
+message VideoChunk {
+    bytes data = 1;           // Chunk dữ liệu của video
+    string client_id = 2;     // ID của client gửi video
+}
+
+// Kết quả xử lý video và file txt
+message RecognitionFileResult {
+    string client_id = 2;      // ID của client
+    bytes txt_chunk = 3;  // Đường dẫn tới file CSV kết quả
+}
