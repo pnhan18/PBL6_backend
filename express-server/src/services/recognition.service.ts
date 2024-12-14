@@ -41,4 +41,9 @@ export class RecognitionService implements IRecognitionService {
     await fs.unlink(video.path);
     return { url, result };
   }
+
+  async recognitionRealTime(userId: string, video: Buffer) {
+    const result = await this.grpcService.sendChunkToProcess(userId, video);
+    return result;
+  }
 }

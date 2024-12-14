@@ -14,21 +14,13 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x13sign_language.proto\"-\n\nVideoFrame\x12\x0c\n\x04\x64\x61ta\x18\x01 \x01(\x0c\x12\x11\n\tclient_id\x18\x02 \x01(\t\"6\n\x11RecognitionResult\x12\x0e\n\x06result\x18\x01 \x01(\t\x12\x11\n\tclient_id\x18\x02 \x01(\t\"-\n\nVideoChunk\x12\x0c\n\x04\x64\x61ta\x18\x01 \x01(\x0c\x12\x11\n\tclient_id\x18\x02 \x01(\t\"=\n\x15RecognitionFileResult\x12\x11\n\tclient_id\x18\x02 \x01(\t\x12\x11\n\ttxt_chunk\x18\x03 \x01(\x0c\x32\x90\x01\n\x1eSignLanguageRecognitionService\x12\x38\n\x15RecognizeSignLanguage\x12\x0b.VideoFrame\x1a\x12.RecognitionResult\x12\x34\n\x0bUploadVideo\x12\x0b.VideoChunk\x1a\x16.RecognitionFileResult(\x01\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x13sign_language.proto\"6\n\x11RecognitionResult\x12\x0e\n\x06result\x18\x01 \x01(\t\x12\x11\n\tclient_id\x18\x02 \x01(\t\"-\n\nVideoChunk\x12\x0c\n\x04\x64\x61ta\x18\x01 \x01(\x0c\x12\x11\n\tclient_id\x18\x02 \x01(\t\"=\n\x15RecognitionFileResult\x12\x11\n\tclient_id\x18\x02 \x01(\t\x12\x11\n\ttxt_chunk\x18\x03 \x01(\x0c\x32\x92\x01\n\x1eSignLanguageRecognitionService\x12:\n\x15RecognizeSignLanguage\x12\x0b.VideoChunk\x1a\x12.RecognitionResult(\x01\x12\x34\n\x0bUploadVideo\x12\x0b.VideoChunk\x1a\x16.RecognitionFileResult(\x01\x62\x06proto3')
 
 
 
-_VIDEOFRAME = DESCRIPTOR.message_types_by_name['VideoFrame']
 _RECOGNITIONRESULT = DESCRIPTOR.message_types_by_name['RecognitionResult']
 _VIDEOCHUNK = DESCRIPTOR.message_types_by_name['VideoChunk']
 _RECOGNITIONFILERESULT = DESCRIPTOR.message_types_by_name['RecognitionFileResult']
-VideoFrame = _reflection.GeneratedProtocolMessageType('VideoFrame', (_message.Message,), {
-  'DESCRIPTOR' : _VIDEOFRAME,
-  '__module__' : 'sign_language_pb2'
-  # @@protoc_insertion_point(class_scope:VideoFrame)
-  })
-_sym_db.RegisterMessage(VideoFrame)
-
 RecognitionResult = _reflection.GeneratedProtocolMessageType('RecognitionResult', (_message.Message,), {
   'DESCRIPTOR' : _RECOGNITIONRESULT,
   '__module__' : 'sign_language_pb2'
@@ -54,14 +46,12 @@ _SIGNLANGUAGERECOGNITIONSERVICE = DESCRIPTOR.services_by_name['SignLanguageRecog
 if _descriptor._USE_C_DESCRIPTORS == False:
 
   DESCRIPTOR._options = None
-  _VIDEOFRAME._serialized_start=23
-  _VIDEOFRAME._serialized_end=68
-  _RECOGNITIONRESULT._serialized_start=70
-  _RECOGNITIONRESULT._serialized_end=124
-  _VIDEOCHUNK._serialized_start=126
-  _VIDEOCHUNK._serialized_end=171
-  _RECOGNITIONFILERESULT._serialized_start=173
-  _RECOGNITIONFILERESULT._serialized_end=234
-  _SIGNLANGUAGERECOGNITIONSERVICE._serialized_start=237
-  _SIGNLANGUAGERECOGNITIONSERVICE._serialized_end=381
+  _RECOGNITIONRESULT._serialized_start=23
+  _RECOGNITIONRESULT._serialized_end=77
+  _VIDEOCHUNK._serialized_start=79
+  _VIDEOCHUNK._serialized_end=124
+  _RECOGNITIONFILERESULT._serialized_start=126
+  _RECOGNITIONFILERESULT._serialized_end=187
+  _SIGNLANGUAGERECOGNITIONSERVICE._serialized_start=190
+  _SIGNLANGUAGERECOGNITIONSERVICE._serialized_end=336
 # @@protoc_insertion_point(module_scope)

@@ -2,16 +2,10 @@ syntax = "proto3";
 
 service SignLanguageRecognitionService {
     // Nhận diện trên từng frame
-    rpc RecognizeSignLanguage (VideoFrame) returns (RecognitionResult);
+    rpc RecognizeSignLanguage (stream VideoChunk) returns (RecognitionResult);
     
     // Nhận và xử lý toàn bộ video
     rpc UploadVideo (stream VideoChunk) returns (RecognitionFileResult);
-}
-
-// Message cho nhận diện từng frame
-message VideoFrame {
-    bytes data = 1;   // Dữ liệu frame (hình ảnh)
-    string client_id = 2; // ID của client
 }
 
 // Kết quả nhận diện từng frame

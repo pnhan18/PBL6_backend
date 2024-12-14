@@ -76,28 +76,74 @@ class RecognitionService:
         model.load_weights('./models/LSTM_refined2.h5')
         return model
     
-    def RecognizeSignLanguage(self, frame):
-        """
-        Recognize actions from a single frame (numpy array).
-        Returns a string representing the recognized action.
-        """
-        try:
-            # Mediapipe processing
-            with self.mp_holistic.Holistic(min_detection_confidence=0.8, min_tracking_confidence=0.95) as holistic:
-                _, results = self.mediapipe_detection(frame, holistic)
+    def RecognizeSignLanguage(self, request_iterator, context):
+        client_id = None
+        for request in request_iterator:
+            client_id = request.client_id
+            result = self.process_chunk(request.data, 15)
+            return signlanguage_pb2.RecognitionResult(
+                client_id=client_id,
+                result=result,)
+            
+        
+    def process_chunk(self, chunk, frame_interval=1):
+        results_string = ""
+
+        with mp.solutions.holistic.Holistic(min_detection_confidence=0.8, min_tracking_confidence=0.8, static_image_mode=False) as holistic:
+            try:
+                # Kiểm tra chunk có hợp lệ không
+                if not isinstance(chunk, np.ndarray) or chunk.size == 0:
+                    raise ValueError("Invalid chunk: Not a valid image array or empty data")
+
+                # Resize và chuyển đổi frame sang RGB
+                frame = cv2.resize(chunk, (640, 360))
+                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+                # Mediapipe detection
+                image, results = self.mediapipe_detection(frame_rgb, holistic)
+                if results is None:
+                    print("No results from Mediapipe, skipping frame...")
+                    return results_string
+
+                # Extract keypoints
                 keypoints = self.extract_keypoints(results)
+                if keypoints is None:
+                    print("No keypoints extracted, skipping frame...")
+                    return results_string
                 self.sequence.append(keypoints)
-                self.sequence = self.sequence[-30:]  # Keep only the last 30 frames
 
-                # Predict when we have a complete sequence
+                # Giữ độ dài cố định cho sequence
+                self.sequence = self.sequence[-30:]
+
+                # Dự đoán khi sequence đủ 30 frame
                 if len(self.sequence) == 30:
-                    res = self.model.predict(np.expand_dims(self.sequence, axis=0))[0]
-                    action = self.get_action(res)
-                    return action
+                    input_sequence = np.expand_dims(np.array(self.sequence), axis=0).astype(np.float16)
+                    try:
+                        res = self.predict_action(input_sequence)[0].numpy()
+                    except Exception as e:
+                        print(f"Error during prediction: {e}")
+                        return results_string
 
-            return "No action detected."
-        except Exception as e:
-            return f"Error: {str(e)}"
+                    # Giải mã kết quả dự đoán
+                    action = self.actions[np.argmax(res)]
+                    confidence = res[np.argmax(res)]
+
+                    # Lưu kết quả nếu confidence cao
+                    if confidence > self.threshold and action != self.previous_action:
+                        results_string += f"Action: {action}, Confidence: {confidence:.2f}\n"
+                        self.previous_action = action
+
+                        if not self.sentence or action != self.sentence[-1]:
+                            self.sentence.append(action)
+
+                    # Giới hạn câu lệnh tối đa 5 hành động
+                    if len(self.sentence) > 5:
+                        self.sentence = self.sentence[-5:]
+            except Exception as e:
+                print(f"Error processing chunk: {e}")
+
+        return results_string
+
     
     def UploadVideo(self, request_iterator, context):
         upload_dir = "uploads"
@@ -146,9 +192,7 @@ class RecognitionService:
         print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
         # Define TensorFlow prediction function with @tf.function for optimization
-        @tf.function
-        def predict_action(input_sequence):
-            return self.model(input_sequence, training=False)
+       
 
         # Open file to write predictions
         fileName = f"predictions_{int(time.time())}.txt"
@@ -176,7 +220,7 @@ class RecognitionService:
                         input_sequence = np.expand_dims(np.array(self.sequence), axis=0).astype(np.float16)  # Use float16 if mixed precision
 
                         # Make prediction
-                        res = predict_action(input_sequence)[0].numpy()
+                        res = self.predict_action(input_sequence)[0].numpy()
 
                         # Decode prediction
                         action = self.actions[np.argmax(res)]
@@ -215,10 +259,6 @@ class RecognitionService:
         rh = np.array([[res.x, res.y, res.z] for res in results.right_hand_landmarks.landmark]).flatten() if results.right_hand_landmarks else np.zeros(21 * 3)
         return np.concatenate([pose, face, lh, rh])
 
-    def get_action(self, predictions):
-        """
-        Predict action based on model output and return a string result.
-        """
-        if predictions[np.argmax(predictions)] > self.threshold:
-            return self.actions[np.argmax(predictions)]
-        return "Unknown"
+    @tf.function
+    def predict_action(self, input_sequence):
+        return self.model(input_sequence, training=False)

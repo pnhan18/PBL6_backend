@@ -14,9 +14,9 @@ class SignLanguageRecognitionServiceStub(object):
         Args:
             channel: A grpc.Channel.
         """
-        self.RecognizeSignLanguage = channel.unary_unary(
+        self.RecognizeSignLanguage = channel.stream_unary(
                 '/SignLanguageRecognitionService/RecognizeSignLanguage',
-                request_serializer=sign__language__pb2.VideoFrame.SerializeToString,
+                request_serializer=sign__language__pb2.VideoChunk.SerializeToString,
                 response_deserializer=sign__language__pb2.RecognitionResult.FromString,
                 )
         self.UploadVideo = channel.stream_unary(
@@ -29,7 +29,7 @@ class SignLanguageRecognitionServiceStub(object):
 class SignLanguageRecognitionServiceServicer(object):
     """Missing associated documentation comment in .proto file."""
 
-    def RecognizeSignLanguage(self, request, context):
+    def RecognizeSignLanguage(self, request_iterator, context):
         """Nhận diện trên từng frame
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -46,9 +46,9 @@ class SignLanguageRecognitionServiceServicer(object):
 
 def add_SignLanguageRecognitionServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
-            'RecognizeSignLanguage': grpc.unary_unary_rpc_method_handler(
+            'RecognizeSignLanguage': grpc.stream_unary_rpc_method_handler(
                     servicer.RecognizeSignLanguage,
-                    request_deserializer=sign__language__pb2.VideoFrame.FromString,
+                    request_deserializer=sign__language__pb2.VideoChunk.FromString,
                     response_serializer=sign__language__pb2.RecognitionResult.SerializeToString,
             ),
             'UploadVideo': grpc.stream_unary_rpc_method_handler(
@@ -67,7 +67,7 @@ class SignLanguageRecognitionService(object):
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod
-    def RecognizeSignLanguage(request,
+    def RecognizeSignLanguage(request_iterator,
             target,
             options=(),
             channel_credentials=None,
@@ -77,8 +77,8 @@ class SignLanguageRecognitionService(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/SignLanguageRecognitionService/RecognizeSignLanguage',
-            sign__language__pb2.VideoFrame.SerializeToString,
+        return grpc.experimental.stream_unary(request_iterator, target, '/SignLanguageRecognitionService/RecognizeSignLanguage',
+            sign__language__pb2.VideoChunk.SerializeToString,
             sign__language__pb2.RecognitionResult.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)

@@ -19,7 +19,7 @@ class UserRouter extends BaseRouter {
         
         this.router
           .route("/:user_id/change-avatar")
-          .patch(authentication, grantAccess("createOwn", "users"), uploadMemory.single("file"), CatchAsync(this.controller.changeAvatar));
+          .patch(authentication, grantAccess("updateOwn", "users"), uploadMemory.single("file"), CatchAsync(this.controller.changeAvatar));
     }
 }
 

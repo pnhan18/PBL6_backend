@@ -13,8 +13,8 @@ export const grantAccess = (action: Action, resource: string) => {
                 throw new AuthFailureError('Permission denied');
             }
             if (action.includes('Own')) {
-                const resourceOwnerId = req.params.userId;
-                const currentUserId = req.user?._id;
+                const resourceOwnerId = req.params.user_id;
+                const currentUserId = req.user?._id.toString();
 
                 if (resourceOwnerId !== currentUserId) {
                     throw new AuthFailureError('Permission denied');
