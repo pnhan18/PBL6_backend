@@ -31,9 +31,10 @@ export class RecognitionController {
       const userId = url.searchParams.get("userId") as string;
       console.log("User ID:", userId);
       ws.on("message", async (chunk: Buffer) => {
-        console.log("test");
         const result = await this.recognitionService.recognitionRealTime(userId, chunk);
-        ws.send(result);
+        if(result !== "") {
+          ws.send(result);
+        }
       });
     });
   };

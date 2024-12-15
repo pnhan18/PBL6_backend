@@ -81,68 +81,60 @@ class RecognitionService:
         for request in request_iterator:
             client_id = request.client_id
             result = self.process_chunk(request.data, 15)
+            # print(request.data)
             return signlanguage_pb2.RecognitionResult(
                 client_id=client_id,
                 result=result,)
             
         
     def process_chunk(self, chunk, frame_interval=1):
-        results_string = ""
-
+        result_string = ""  # Khởi tạo chuỗi kết quả
+        width, height = 640, 480
+        sequence = []  # Danh sách để lưu trữ các điểm mốc
+        sentence = []  # Câu để lưu trữ các hành động đã nhận diện
+        
         with mp.solutions.holistic.Holistic(min_detection_confidence=0.8, min_tracking_confidence=0.8, static_image_mode=False) as holistic:
             try:
-                # Kiểm tra chunk có hợp lệ không
-                if not isinstance(chunk, np.ndarray) or chunk.size == 0:
-                    raise ValueError("Invalid chunk: Not a valid image array or empty data")
+                frame = np.frombuffer(chunk, dtype=np.uint8).reshape((height, width, 4))
 
-                # Resize và chuyển đổi frame sang RGB
-                frame = cv2.resize(chunk, (640, 360))
-                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                # Chuyển từ RGBA sang BGR để OpenCV xử lý
+                frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR)
 
                 # Mediapipe detection
-                image, results = self.mediapipe_detection(frame_rgb, holistic)
-                if results is None:
-                    print("No results from Mediapipe, skipping frame...")
-                    return results_string
-
-                # Extract keypoints
+                image, results = self.mediapipe_detection(frame, holistic)
+                
                 keypoints = self.extract_keypoints(results)
-                if keypoints is None:
-                    print("No keypoints extracted, skipping frame...")
-                    return results_string
-                self.sequence.append(keypoints)
+                sequence.append(keypoints)
+                sequence = sequence[-30:]  # Giữ lại 30 khung hình gần nhất
 
-                # Giữ độ dài cố định cho sequence
-                self.sequence = self.sequence[-30:]
+                if len(sequence) == 30:
+                    # Dự đoán hành động từ chuỗi điểm mốc
+                    res = self.model.predict(np.expand_dims(sequence, axis=0))[0]
+                    predicted_action = self.actions[np.argmax(res)]  # Hành động dự đoán
 
-                # Dự đoán khi sequence đủ 30 frame
-                if len(self.sequence) == 30:
-                    input_sequence = np.expand_dims(np.array(self.sequence), axis=0).astype(np.float16)
-                    try:
-                        res = self.predict_action(input_sequence)[0].numpy()
-                    except Exception as e:
-                        print(f"Error during prediction: {e}")
-                        return results_string
+                    # In ra kết quả hành động dự đoán
+                    print(predicted_action)
 
-                    # Giải mã kết quả dự đoán
-                    action = self.actions[np.argmax(res)]
-                    confidence = res[np.argmax(res)]
+                    # Kiểm tra nếu kết quả dự đoán vượt qua ngưỡng
+                    if res[np.argmax(res)] > self.threshold:
+                        if len(sentence) > 0:
+                            if predicted_action != sentence[-1]:
+                                sentence.append(predicted_action)
+                        else:
+                            sentence.append(predicted_action)
 
-                    # Lưu kết quả nếu confidence cao
-                    if confidence > self.threshold and action != self.previous_action:
-                        results_string += f"Action: {action}, Confidence: {confidence:.2f}\n"
-                        self.previous_action = action
+                    # Giới hạn số lượng hành động trong câu
+                    if len(sentence) > 5:
+                        sentence = sentence[-5:]
 
-                        if not self.sentence or action != self.sentence[-1]:
-                            self.sentence.append(action)
+                # Cập nhật kết quả chuỗi
+                result_string = " ".join(sentence)  # Gắn kết các hành động vào một chuỗi
 
-                    # Giới hạn câu lệnh tối đa 5 hành động
-                    if len(self.sentence) > 5:
-                        self.sentence = self.sentence[-5:]
             except Exception as e:
                 print(f"Error processing chunk: {e}")
 
-        return results_string
+        return result_string
+
 
     
     def UploadVideo(self, request_iterator, context):
