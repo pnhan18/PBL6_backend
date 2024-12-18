@@ -59,7 +59,7 @@ export class UploadSerivce implements IUploadService {
             Bucket: bucketName,
             Key: fileName,
             Body: fs.createReadStream(txtFilePath),
-            ContentType: "text/plain",
+            ContentType: "text/vtt",
           },
         });
         await upload.done();

@@ -183,13 +183,14 @@ class RecognitionService:
         # Verify GPU usage
         print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
-        # Define TensorFlow prediction function with @tf.function for optimization
-       
-
-        # Open file to write predictions
-        fileName = f"predictions_{int(time.time())}.txt"
-        pathFile = os.path.join("uploads", fileName)
-        with open(pathFile, 'w') as f:
+        # Open file to write WebVTT subtitles
+        file_name = f"predictions_{int(time.time())}.vtt"
+        path_file = os.path.join("uploads", file_name)
+        
+        with open(path_file, 'w') as f:
+            # Write WebVTT header
+            f.write("WEBVTT\n\n")
+            
             with self.mp_holistic.Holistic(min_detection_confidence=0.8, min_tracking_confidence=0.8, static_image_mode=False) as holistic:
                 while cap.isOpened():
                     ret, frame = cap.read()
@@ -220,7 +221,15 @@ class RecognitionService:
 
                         if confidence > self.threshold and action != self.previous_action:
                             current_frame = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
-                            f.write(f"Frame {current_frame}: {action}, Confidence: {confidence}\n")
+                            
+                            # Calculate start and end time for subtitle
+                            start_time = self.frame_to_timestamp(current_frame, video_fps)
+                            end_time = self.frame_to_timestamp(current_frame + frame_interval, video_fps)
+                            
+                            # Write subtitle in WebVTT format
+                            f.write(f"{start_time} --> {end_time}\n")
+                            f.write(f"{action} (Confidence: {confidence:.2f})\n\n")
+                            
                             previous_action = action
 
                             if not self.sentence or action != self.sentence[-1]:
@@ -234,7 +243,16 @@ class RecognitionService:
         cap.release()
         cv2.destroyAllWindows()
         os.remove(video_path)
-        return pathFile
+        return path_file
+
+    def frame_to_timestamp(self, frame, fps):
+        """Convert frame number to timestamp in WebVTT format."""
+        total_seconds = frame / fps
+        hours = int(total_seconds // 3600)
+        minutes = int((total_seconds % 3600) // 60)
+        seconds = int(total_seconds % 60)
+        milliseconds = int((total_seconds - int(total_seconds)) * 1000)
+        return f"{hours:02}:{minutes:02}:{seconds:02}.{milliseconds:03}"
 
     def mediapipe_detection(self, image, model):
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # Convert BGR to RGB

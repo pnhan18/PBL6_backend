@@ -30,7 +30,7 @@ export class GrpcService implements IGrpcService {
             const uploadDir = path.join(__dirname, "..", "uploads");
             const txtPath = path.join(
               uploadDir,
-              `${userId}_result_${randomName()}.txt`
+              `${userId}_result_${randomName()}.vtt`
             );
             fs.writeFileSync(txtPath, txtData);
             resolve(txtPath);

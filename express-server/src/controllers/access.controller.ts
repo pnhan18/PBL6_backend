@@ -21,16 +21,16 @@ export class AccessController {
     );
   }
 
-  async logOut(req: Request, res: Response, next: NextFunction): Promise<void> {
+  logOut = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     await this.accessService.logOut({ user_id: req.user!["_id"] });
     new OK("Logout successfully").send(res);
   }
 
-  async changePassword(
+  changePassword = async(
     req: Request,
     res: Response,
     next: NextFunction
-  ): Promise<void> {
+  ): Promise<void> => {
     new OK(
       "Change password successfully",
       await this.accessService.changePassword({
@@ -40,11 +40,11 @@ export class AccessController {
     ).send(res);
   }
 
-  async getAccessToken(
+  getAccessToken = async(
     req: Request,
     res: Response,
     next: NextFunction
-  ): Promise<void> {
+  ): Promise<void> =>{
     new OK(
       "Get access token successfully",
       await this.accessService.getAccessToken({
@@ -54,20 +54,20 @@ export class AccessController {
     ).send(res);
   }
 
-  async forgotPassword(
+  forgotPassword = async (
     req: Request,
     res: Response,
     next: NextFunction
-  ): Promise<void> {
+  ): Promise<void> => {
     await this.accessService.forgotPassword(req.body);
     new OK("Password reset email sent").send(res);
   }
 
-  async resetPassword(
+  resetPassword = async(
     req: Request,
     res: Response,
     next: NextFunction
-  ): Promise<void> {
+  ): Promise<void> => {
     new OK(
       "Reset password successfully",
       await this.accessService.resetPassword(req.body)
