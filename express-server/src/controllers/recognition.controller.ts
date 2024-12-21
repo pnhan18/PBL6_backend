@@ -32,6 +32,7 @@ export class RecognitionController {
       console.log("User ID:", userId);
       ws.on("message", async (chunk: Buffer) => {
         const result = await this.recognitionService.recognitionRealTime(userId, chunk);
+        console.log("Result:", result);
         if(result !== "") {
           ws.send(result);
         }

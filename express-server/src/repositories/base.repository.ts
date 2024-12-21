@@ -41,7 +41,6 @@ export class BaseRepository<T, ID extends Types.ObjectId>
         }
       }
     }
-    console.log(query);
     return (await this.model
       .find(query)
       .select(selectData(select))

@@ -26,7 +26,7 @@ class UserController {
     updateUserById = async (req: Request, res: Response, next: NextFunction) => {
         new OK(
             "Update success",
-            await this.userService.updateUserById({ id: req.query.id as string, newData: req.body })
+            await this.userService.updateUserById({ id: req.params.user_id as string, newData: req.body })
         ).send(res);
     }
 
