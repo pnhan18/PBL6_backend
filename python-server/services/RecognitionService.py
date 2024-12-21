@@ -2,9 +2,17 @@ import cv2
 import numpy as np
 import mediapipe as mp
 import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Dropout, BatchNormalization, Conv1D, MaxPooling1D, Bidirectional, LSTM, GRU
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.mixed_precision import LossScaleOptimizer
+from tensorflow.keras.layers import LeakyReLU, Multiply, Input
+from tensorflow.keras import layers, optimizers
 from collections import deque
 import time
 import os
+import json
+import base64
 import generated.sign_language_pb2 as signlanguage_pb2
 
 try:
@@ -17,125 +25,129 @@ except ImportError:
 class RecognitionService:
     def __init__(self):
         self.mp_holistic = mp.solutions.holistic
-        self.sequence = deque(maxlen=30)
+        self.sequence = []
         self.sentence = []
         self.threshold = 0.8
         self.previous_action = None
-        self.actions = np.array(['hello', 'father', 'mother', 'deaf', 'no', 'love', "help", "please", "more", "thankyou"])
+        self.actions = np.array(['hello', 'father', 'love', 'deaf', 'mother', 'no', "idle", "yes", "help", "please", "more", "thankyou",
+                                 "dontwant", "finish", "nice_to_meet_you", "how_are_you", "correct", "wrong", "bad", "busy",
+                                 "fine", "good", "same", "happy", "so_so", "you", "notyet", "see", "pay_attention", "hearing", "house", "car"])
         self.model = self.load_model()
 
+    class SEblock(tf.keras.layers.Layer):
+        def __init__(self, channels, reduction_ratio=16):
+            super(RecognitionService.SEblock, self).__init__()
+            self.channels = channels
+            self.reduction_ratio = reduction_ratio
+            self.fc1 = Dense(channels // reduction_ratio, activation='relu')
+            self.fc2 = Dense(channels, activation='sigmoid')
+
+        def call(self, inputs):
+            squeeze = tf.reduce_mean(inputs, axis=1)
+            squeeze = tf.expand_dims(squeeze, axis=1)
+            excitation = self.fc1(squeeze)
+            excitation = self.fc2(excitation)
+            excitation = tf.reshape(excitation, [-1, 1, self.channels])
+            return Multiply()([inputs, excitation])
+
     def load_model(self):
-        model = tf.keras.Sequential([
-            tf.keras.layers.Conv1D(64, kernel_size=3, activation='relu', padding='same', input_shape=(30, 1662)),
-            tf.keras.layers.MaxPooling1D(pool_size=2),
-            tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.Dropout(0.3),
+        model = Sequential()
 
-            tf.keras.layers.Conv1D(128, kernel_size=3, activation='relu', padding='same'),
-            tf.keras.layers.MaxPooling1D(pool_size=2),
-            tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.Dropout(0.3),
+        model.add(Input(shape=(30, 1662)))
+        model.add(Conv1D(64, kernel_size=3, activation='relu', padding='same'))
+        model.add(MaxPooling1D(pool_size=2))
+        model.add(BatchNormalization())  
+        model.add(Dropout(0.3))
 
-            tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(128, return_sequences=True)),
-            tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.Activation('relu'),
-            tf.keras.layers.Dropout(0.3),
+        model.add(Conv1D(128, kernel_size=3, activation='relu', padding='same'))
+        model.add(MaxPooling1D(pool_size=2))
+        model.add(BatchNormalization())
+        model.add(Dropout(0.3))
 
-            tf.keras.layers.Bidirectional(tf.keras.layers.GRU(256, return_sequences=True)),
-            tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.Activation('relu'),
-            tf.keras.layers.Dropout(0.3),
+        model.add(Bidirectional(LSTM(128, return_sequences=True)))  
+        model.add(BatchNormalization())
+        model.add(layers.LeakyReLU(alpha=0.01))
+        model.add(Dropout(0.3))
+        model.add(self.SEblock(256))
 
-            tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(512, return_sequences=True)),
-            tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.Activation('relu'),
-            tf.keras.layers.Dropout(0.3),
+        model.add(Bidirectional(GRU(256, return_sequences=True)))
+        model.add(BatchNormalization())
+        model.add(layers.LeakyReLU(alpha=0.01))
+        model.add(Dropout(0.3))
+        model.add(self.SEblock(512))
 
-            tf.keras.layers.LSTM(256, return_sequences=True),
-            tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.Activation('relu'),
-            tf.keras.layers.Dropout(0.3),
+        model.add(Bidirectional(LSTM(512, return_sequences=True)))  
+        model.add(BatchNormalization())
+        model.add(layers.LeakyReLU(alpha=0.01))
+        model.add(Dropout(0.3))
+        model.add(self.SEblock(1024))
 
-            tf.keras.layers.LSTM(128, return_sequences=False),
-            tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.Activation('relu'),
-            tf.keras.layers.Dropout(0.3),
+        model.add(LSTM(256, return_sequences=True))  
+        model.add(BatchNormalization())
+        model.add(layers.LeakyReLU(alpha=0.01))
+        model.add(Dropout(0.3))
+        model.add(self.SEblock(256))  
 
-            tf.keras.layers.Dense(128, activation='relu'),
-            tf.keras.layers.Dropout(0.3),
-            tf.keras.layers.Dense(64, activation='relu'),
-            tf.keras.layers.Dense(self.actions.shape[0], activation='softmax')
-        ])
+        model.add(LSTM(128, return_sequences=False))  
+        model.add(BatchNormalization())
+        model.add(layers.LeakyReLU(alpha=0.01))
+        model.add(Dropout(0.3))
 
-        # Compile the model
-        model.compile(optimizer='adam',
-                    loss='categorical_crossentropy',
-                    metrics=['accuracy'])
-
-        # Load the weights
-        model.load_weights('./models/LSTM_refined2.h5')
+        model.add(layers.LeakyReLU(alpha=0.01))
+        model.add(Dropout(0.3))
+        model.add(layers.LeakyReLU(alpha=0.01))
+        model.add(Dense(self.actions.shape[0], activation='softmax')) 
+        model.load_weights('./models/LSTM_30_90_auge_relu.h5')
         return model
+
     
     def RecognizeSignLanguage(self, request_iterator, context):
         client_id = None
+        result = None
+
         for request in request_iterator:
-            client_id = request.client_id
-            result = self.process_chunk(request.data, 15)
-            # print(request.data)
-            return signlanguage_pb2.RecognitionResult(
-                client_id=client_id,
-                result=result,)
-            
-        
-    def process_chunk(self, chunk, frame_interval=1):
-        result_string = ""  # Khởi tạo chuỗi kết quả
-        width, height = 640, 480
-        sequence = []  # Danh sách để lưu trữ các điểm mốc
-        sentence = []  # Câu để lưu trữ các hành động đã nhận diện
-        
-        with mp.solutions.holistic.Holistic(min_detection_confidence=0.8, min_tracking_confidence=0.8, static_image_mode=False) as holistic:
             try:
-                frame = np.frombuffer(chunk, dtype=np.uint8).reshape((height, width, 4))
+                client_id = request.client_id
+                if isinstance(request.data, bytes):
+                    data = request.data.decode('utf-8')  # Giải mã bytes thành chuỗi
+                else:
+                    data = request.data
 
-                # Chuyển từ RGBA sang BGR để OpenCV xử lý
-                frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR)
+                data_dict = json.loads(data)
 
-                # Mediapipe detection
-                image, results = self.mediapipe_detection(frame, holistic)
-                
-                keypoints = self.extract_keypoints(results)
-                sequence.append(keypoints)
-                sequence = sequence[-30:]  # Giữ lại 30 khung hình gần nhất
+                frames_base64 = data_dict.get('frames', [])
 
-                if len(sequence) == 30:
-                    # Dự đoán hành động từ chuỗi điểm mốc
-                    res = self.model.predict(np.expand_dims(sequence, axis=0))[0]
-                    predicted_action = self.actions[np.argmax(res)]  # Hành động dự đoán
+                mp_holistic = mp.solutions.holistic
+                with mp_holistic.Holistic(min_detection_confidence=0.8, min_tracking_confidence=0.95) as holistic:
+                    for idx, frame_base64 in enumerate(frames_base64):
+                        # Loại bỏ tiền tố "data:image/jpeg;base64," trước khi giải mã
+                        frame_data = base64.b64decode(frame_base64.split(',')[1])
+                        frame_array = np.frombuffer(frame_data, dtype=np.uint8)
 
-                    # In ra kết quả hành động dự đoán
-                    print(predicted_action)
+                        # Giải mã JPEG thành hình ảnh
+                        frame = cv2.imdecode(frame_array, cv2.IMREAD_COLOR)
+                        if frame is None:
+                            raise ValueError(f"Frame {idx} could not be decoded.")
+                        image, results = self.mediapipe_detection(frame, holistic)
+                        keypoints = self.extract_keypoints(results)
+                        self.sequence.append(keypoints)
+                        self.sequence = self.sequence[-30:]
+                        if len(self.sequence) == 30:
+                            res = self.model.predict(np.expand_dims(self.sequence, axis=0))[0]
+                            result = self.actions[np.argmax(res)]
+                            print(result)
+                    
 
-                    # Kiểm tra nếu kết quả dự đoán vượt qua ngưỡng
-                    if res[np.argmax(res)] > self.threshold:
-                        if len(sentence) > 0:
-                            if predicted_action != sentence[-1]:
-                                sentence.append(predicted_action)
-                        else:
-                            sentence.append(predicted_action)
-
-                    # Giới hạn số lượng hành động trong câu
-                    if len(sentence) > 5:
-                        sentence = sentence[-5:]
-
-                # Cập nhật kết quả chuỗi
-                result_string = " ".join(sentence)  # Gắn kết các hành động vào một chuỗi
-
+                return signlanguage_pb2.RecognitionResult(
+                    client_id=client_id,
+                    result=result,
+                )
             except Exception as e:
-                print(f"Error processing chunk: {e}")
-
-        return result_string
-
-
+                print(f"Error processing request: {e}")
+                return signlanguage_pb2.RecognitionResult(
+                    client_id=client_id,
+                    result="Error processing frames.",
+                )
     
     def UploadVideo(self, request_iterator, context):
         upload_dir = "uploads"
