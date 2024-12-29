@@ -51,10 +51,11 @@ class Authentication {
     return jwt.sign(payload, secretKey, optionAccess);
   }
 
-  public static generateRefreshToken(email: string) {
+  public static generateRefreshToken(email: string, userId: string) {
     const secretKey: string = process.env.JWT_SECRET_KEY || "my-secret-key";
     const payload: Payload = {
       email: email,
+      userId: userId,
     };
     const optionRefresh = { expiresIn: process.env.REFRESH_TOKEN_EXPIRY };
     return jwt.sign(payload, secretKey, optionRefresh);
@@ -65,6 +66,7 @@ class Authentication {
       const secretKey: string = process.env.JWT_SECRET_KEY || "my-secret-key";
       return jwt.verify(token, secretKey) as Payload;
     } catch (err) {
+      console.log(err);
       return null;
     }
   }
@@ -78,7 +80,6 @@ class Authentication {
       const optionAccess = { expiresIn: "24h" };
       return jwt.sign(payload, secretKey, optionAccess);
     } catch (error) {
-      console.log(error);
       throw error;
     }
   }

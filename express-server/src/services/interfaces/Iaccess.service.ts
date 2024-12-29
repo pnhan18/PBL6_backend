@@ -15,6 +15,13 @@ export interface IAccessService {
     email: string;
     password: string;
   }): Promise<Record<string, any>>;
+  loginWithGoogle({
+    email,
+    username,
+  }: {
+    email: string;
+    username: string;
+  }): Promise<Record<string, any>>;
   logOut({user_id} : {user_id: string}): Promise<void>;
   getAccessToken({userId, refreshToken} : {userId: string, refreshToken: string}): Promise<Record<string, any>>;
   forgotPassword({ email }: { email: string }): Promise<void>;

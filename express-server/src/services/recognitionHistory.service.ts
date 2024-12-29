@@ -21,4 +21,23 @@ export class RecognitionHistoryService implements IRecognitionHistoryService {
       createdAt: new Date(),
     });
   }
+
+  async getRecognitionHistory({
+    userId,
+    limit = 50,
+    page = 1,
+    filter = {},
+  }: {
+    userId: string;
+    limit?: number;
+    page?: number;
+    filter?: Record<string, any>;
+  }): Promise<IRecognitionHistory[]> {
+    return await this.recognitionHistoryRepository.getRecognitionHistoryByUserId({
+      userId,
+      limit,
+      page,
+      filter: filter,
+    });
+  }
 }

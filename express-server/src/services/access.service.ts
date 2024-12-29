@@ -62,21 +62,26 @@ export class AccessService implements IAccessService {
     return getInforData(newUser, ["_id", "email", "username"]);
   }
 
-  async logIn({ email, password }: { email: string; password: string }) {
-    const holder = await this.userRepository.findByEmail({ email });
+  async loginWithGoogle({
+    email,
+    username,
+  }: {
+    email: string;
+    username: string;
+  }) {
+    let holder = await this.userRepository.findByEmail({ email });
     if (!holder) {
-      throw new BadRequestError("Invalid email or password");
-    }
-
-    const isMatch = await bcrypt.compare(password, holder.password);
-    if (!isMatch) {
-      throw new BadRequestError("Invalid email or password");
+      holder = await this.userRepository.save({
+        email,
+        username,
+        password: "",
+      });
     }
     const user_id = holder._id;
     let refreshToken = await this.redisService.get(`refreshToken:${user_id}`);
     let accessToken;
     if (!refreshToken) {
-      refreshToken = Authentication.generateRefreshToken(email);
+      refreshToken = Authentication.generateRefreshToken(email, user_id);
     }
     accessToken = Authentication.generateAccessToken(
       user_id,
@@ -91,7 +96,58 @@ export class AccessService implements IAccessService {
       120 * 24 * 60 * 60
     );
     return {
-      user: getInforData(holder, ["_id", "email", "avatar", "username", "role", "avatar"]),
+      user: getInforData(holder, [
+        "_id",
+        "email",
+        "avatar",
+        "username",
+        "role",
+        "avatar",
+      ]),
+      token: {
+        accessToken: accessToken,
+        refreshToken: refreshToken,
+      },
+    };
+  }
+
+  async logIn({ email, password }: { email: string; password: string }) {
+    const holder = await this.userRepository.findByEmail({ email });
+    if (!holder) {
+      throw new BadRequestError("Invalid email or password");
+    }
+
+    const isMatch = await bcrypt.compare(password, holder.password);
+    if (!isMatch) {
+      throw new BadRequestError("Invalid email or password");
+    }
+    const user_id = holder._id;
+    let refreshToken = await this.redisService.get(`refreshToken:${user_id}`);
+    let accessToken;
+    if (!refreshToken) {
+      refreshToken = Authentication.generateRefreshToken(email, user_id);
+    }
+    accessToken = Authentication.generateAccessToken(
+      user_id,
+      holder.role,
+      holder.username,
+      email
+    );
+    // save refreshToken to redis
+    this.redisService.set(
+      `refreshToken:${user_id}`,
+      refreshToken,
+      120 * 24 * 60 * 60
+    );
+    return {
+      user: getInforData(holder, [
+        "_id",
+        "email",
+        "avatar",
+        "username",
+        "role",
+        "avatar",
+      ]),
       token: {
         accessToken: accessToken,
         refreshToken: refreshToken,
@@ -132,7 +188,7 @@ export class AccessService implements IAccessService {
     const newUser = await this.userRepository.update(new ObjectId(userId), {
       password: hashPassword,
     });
-    const refreshToken = Authentication.generateRefreshToken(holder.email);
+    const refreshToken = Authentication.generateRefreshToken(holder.email, holder._id);
     const accessToken = Authentication.generateAccessToken(
       userId,
       holder.role,
@@ -200,7 +256,15 @@ export class AccessService implements IAccessService {
     );
   }
 
-  async resetPassword({ token, newPassword, repeatPassword } : { token: string, newPassword: string, repeatPassword: string }) {
+  async resetPassword({
+    token,
+    newPassword,
+    repeatPassword,
+  }: {
+    token: string;
+    newPassword: string;
+    repeatPassword: string;
+  }) {
     const decode = Authentication.validateToken(token);
     if (!decode) {
       throw new BadRequestError("Invalid token");

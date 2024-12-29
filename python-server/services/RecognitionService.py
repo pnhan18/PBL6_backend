@@ -15,6 +15,14 @@ import json
 import base64
 import generated.sign_language_pb2 as signlanguage_pb2
 
+from tensorflow.python.client import device_lib
+
+import tensorflow as tf
+print(tf.__version__)
+print("GPU support:", tf.test.is_built_with_cuda())
+print("CUDA version:", tf.sysconfig.get_build_info()["cuda_version"])
+print("cuDNN version:", tf.sysconfig.get_build_info()["cudnn_version"])
+
 try:
     from tensorflow.keras import mixed_precision
     mixed_precision.set_global_policy('mixed_float16')
@@ -22,82 +30,92 @@ try:
 except ImportError:
     print("Mixed precision not available.")
 
+class SEblock(tf.keras.layers.Layer):
+    def __init__(self, channels, reduction_ratio=16):
+        super(SEblock, self).__init__()
+        self.channels = channels
+        self.reduction_ratio = reduction_ratio
+        self.fc1 = Dense(channels // reduction_ratio, activation='relu')
+        self.fc2 = Dense(channels, activation='sigmoid')
+
+    def call(self, inputs):
+        squeeze = tf.reduce_mean(inputs, axis=1)  # Global Average Pooling
+        squeeze = tf.expand_dims(squeeze, axis=1)  # Reshape squeeze to match the expected shape
+        excitation = self.fc1(squeeze)
+        excitation = self.fc2(excitation)
+        excitation = tf.reshape(excitation, [-1, 1, self.channels])  # Reshape excitation to match the channel dimension
+        return layers.Multiply()([inputs, excitation])
+
 class RecognitionService:
     def __init__(self):
         self.mp_holistic = mp.solutions.holistic
         self.sequence = []
         self.sentence = []
-        self.threshold = 0.8
+        self.threshold = 0.9
         self.previous_action = None
         self.actions = np.array(['hello', 'father', 'love', 'deaf', 'mother', 'no', "idle", "yes", "help", "please", "more", "thankyou",
                                  "dontwant", "finish", "nice_to_meet_you", "how_are_you", "correct", "wrong", "bad", "busy",
                                  "fine", "good", "same", "happy", "so_so", "you", "notyet", "see", "pay_attention", "hearing", "house", "car"])
         self.model = self.load_model()
 
-    class SEblock(tf.keras.layers.Layer):
-        def __init__(self, channels, reduction_ratio=16):
-            super(RecognitionService.SEblock, self).__init__()
-            self.channels = channels
-            self.reduction_ratio = reduction_ratio
-            self.fc1 = Dense(channels // reduction_ratio, activation='relu')
-            self.fc2 = Dense(channels, activation='sigmoid')
-
-        def call(self, inputs):
-            squeeze = tf.reduce_mean(inputs, axis=1)
-            squeeze = tf.expand_dims(squeeze, axis=1)
-            excitation = self.fc1(squeeze)
-            excitation = self.fc2(excitation)
-            excitation = tf.reshape(excitation, [-1, 1, self.channels])
-            return Multiply()([inputs, excitation])
 
     def load_model(self):
-        model = Sequential()
+        model = tf.keras.Sequential([
+            tf.keras.layers.Conv1D(64, kernel_size=3, activation='relu', padding='same', input_shape=(30, 1662)),
+            tf.keras.layers.MaxPooling1D(pool_size=2),
+            tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.Dropout(0.3),
 
-        model.add(Input(shape=(30, 1662)))
-        model.add(Conv1D(64, kernel_size=3, activation='relu', padding='same'))
-        model.add(MaxPooling1D(pool_size=2))
-        model.add(BatchNormalization())  
-        model.add(Dropout(0.3))
+            tf.keras.layers.Conv1D(128, kernel_size=3, activation='relu', padding='same'),
+            tf.keras.layers.MaxPooling1D(pool_size=2),
+            tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.Dropout(0.3),
 
-        model.add(Conv1D(128, kernel_size=3, activation='relu', padding='same'))
-        model.add(MaxPooling1D(pool_size=2))
-        model.add(BatchNormalization())
-        model.add(Dropout(0.3))
+            tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(128, return_sequences=True)),
+            tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.LeakyReLU(alpha=0.01),
+            tf.keras.layers.Dropout(0.3),
+            SEblock(256),  # Ensure SEblock is implemented as a TensorFlow/Keras-compatible layer
 
-        model.add(Bidirectional(LSTM(128, return_sequences=True)))  
-        model.add(BatchNormalization())
-        model.add(layers.LeakyReLU(alpha=0.01))
-        model.add(Dropout(0.3))
-        model.add(self.SEblock(256))
+            tf.keras.layers.Bidirectional(tf.keras.layers.GRU(256, return_sequences=True)),
+            tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.LeakyReLU(alpha=0.01),
+            tf.keras.layers.Dropout(0.3),
+            SEblock(512),
 
-        model.add(Bidirectional(GRU(256, return_sequences=True)))
-        model.add(BatchNormalization())
-        model.add(layers.LeakyReLU(alpha=0.01))
-        model.add(Dropout(0.3))
-        model.add(self.SEblock(512))
+            tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(512, return_sequences=True)),
+            tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.LeakyReLU(alpha=0.01),
+            tf.keras.layers.Dropout(0.3),
+            SEblock(1024),
 
-        model.add(Bidirectional(LSTM(512, return_sequences=True)))  
-        model.add(BatchNormalization())
-        model.add(layers.LeakyReLU(alpha=0.01))
-        model.add(Dropout(0.3))
-        model.add(self.SEblock(1024))
+            tf.keras.layers.LSTM(256, return_sequences=True),
+            tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.LeakyReLU(alpha=0.01),
+            tf.keras.layers.Dropout(0.3),
+            SEblock(256),
 
-        model.add(LSTM(256, return_sequences=True))  
-        model.add(BatchNormalization())
-        model.add(layers.LeakyReLU(alpha=0.01))
-        model.add(Dropout(0.3))
-        model.add(self.SEblock(256))  
+            tf.keras.layers.LSTM(128, return_sequences=False),
+            tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.LeakyReLU(alpha=0.01),
+            tf.keras.layers.Dropout(0.3),
 
-        model.add(LSTM(128, return_sequences=False))  
-        model.add(BatchNormalization())
-        model.add(layers.LeakyReLU(alpha=0.01))
-        model.add(Dropout(0.3))
+            tf.keras.layers.LeakyReLU(alpha=0.01),
+            tf.keras.layers.Dropout(0.3),
+            tf.keras.layers.LeakyReLU(alpha=0.01),
+            tf.keras.layers.Dense(self.actions.shape[0], activation='softmax')  # Adjust for the number of output classes
+        ])
 
-        model.add(layers.LeakyReLU(alpha=0.01))
-        model.add(Dropout(0.3))
-        model.add(layers.LeakyReLU(alpha=0.01))
-        model.add(Dense(self.actions.shape[0], activation='softmax')) 
-        model.load_weights('./models/LSTM_30_90_auge_relu.h5')
+        initial_lr = 0.01
+        optimizer = Adam(learning_rate=initial_lr)
+        model.compile(optimizer=optimizer, loss="categorical_crossentropy", metrics=["accuracy"])
+
+        # Load the weights
+        try:
+            model.load_weights('./models/LSTM_refined2.h5')
+            print("Trọng số đã được tải thành công.")
+        except Exception as e:
+            print(f"Không thể tải trọng số: {e}")
         return model
 
     
@@ -134,7 +152,8 @@ class RecognitionService:
                         self.sequence = self.sequence[-30:]
                         if len(self.sequence) == 30:
                             res = self.model.predict(np.expand_dims(self.sequence, axis=0))[0]
-                            result = self.actions[np.argmax(res)]
+                            if np.max(res) > self.threshold:
+                                result = self.actions[np.argmax(res)]
                             print(result)
                     
 
@@ -163,11 +182,7 @@ class RecognitionService:
                 video_file.write(request.data)
                 client_id = request.client_id
 
-        print(f"Video saved at {video_path}")
-        print(f"Client ID: {client_id}")
-
         txtPath = self.process_video(video_path)
-        print(txtPath)
 
         with open(txtPath, "rb") as f:
             txt_chunk = f.read()
@@ -213,12 +228,13 @@ class RecognitionService:
                         frame_count += 1
                         continue
 
-                    frame = cv2.resize(frame, (640, 360))
+                    # frame = cv2.resize(frame, (640, 360))
                     image, results = self.mediapipe_detection(frame, holistic)
 
                     # Extract keypoints
                     keypoints = self.extract_keypoints(results)
                     self.sequence.append(keypoints)
+                    self.sequence = self.sequence[-30:]
 
                     if len(self.sequence) == 30:
                         # Convert sequence to numpy array and expand dimensions for batch
@@ -231,7 +247,7 @@ class RecognitionService:
                         action = self.actions[np.argmax(res)]
                         confidence = res[np.argmax(res)]
 
-                        if confidence > self.threshold and action != self.previous_action:
+                        if confidence > self.threshold and action != "idle":
                             current_frame = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
                             
                             # Calculate start and end time for subtitle
@@ -242,13 +258,11 @@ class RecognitionService:
                             f.write(f"{start_time} --> {end_time}\n")
                             f.write(f"{action} (Confidence: {confidence:.2f})\n\n")
                             
-                            previous_action = action
+                            self.previous_action = action
 
                             if not self.sentence or action != self.sentence[-1]:
                                 self.sentence.append(action)
 
-                        if len(self.sentence) > 5:
-                            self.sentence = self.sentence[-5:]
 
                     frame_count += 1
 
