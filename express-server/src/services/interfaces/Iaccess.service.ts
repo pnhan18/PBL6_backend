@@ -18,9 +18,13 @@ export interface IAccessService {
   loginWithGoogle({
     email,
     username,
+    avatar,
+    googleId,
   }: {
     email: string;
     username: string;
+    avatar: string;
+    googleId: string;
   }): Promise<Record<string, any>>;
   logOut({user_id} : {user_id: string}): Promise<void>;
   getAccessToken({userId, refreshToken} : {userId: string, refreshToken: string}): Promise<Record<string, any>>;

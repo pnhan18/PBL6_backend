@@ -5,13 +5,14 @@ export interface IUser extends Document {
     _id: string;
     username: string;
     email: string;
-    password: string;
+    password?: string;
     role: string;
     gender?: 'male' | 'female';
     avatar?: string;
     dateOfBirth?: Date;
     createdAt: Date;
     passwordChangeAt?: Date;
+    googleId?: string;
 }
 
 const userSchema = new Schema<IUser>({
@@ -28,7 +29,6 @@ const userSchema = new Schema<IUser>({
     },
     password: {
         type: String,
-        required: true,
         minlength: 6,
     },
     role: {
@@ -52,6 +52,9 @@ const userSchema = new Schema<IUser>({
     },
     passwordChangeAt: {
         type: Date,
+    },
+    googleId: {
+        type: String,
     }
 });
 

@@ -24,8 +24,8 @@ export class UserService implements IUserService {
     limit?: number;
     page?: number;
     filter?: Record<string, any>;
-  }): Promise<IUser[]> {
-    const users = await this.userRepository.findAll({
+  }): Promise<{data: IUser[], totalPage: number}> {
+    const {data: users, totalPage} = await this.userRepository.findAll({
       limit,
       page,
       filter: filter || {},
@@ -34,7 +34,7 @@ export class UserService implements IUserService {
     if(!users.length) {
       throw new BadRequestError("Users not found");
     }
-    return users;
+    return { data: users, totalPage};
   }
 
   async findUserById(id: string): Promise<IUser | null> {

@@ -9,7 +9,7 @@ export interface IUserService {
     limit?: number;
     page?: number;
     filter?: Record<string, any>;
-  }): Promise<IUser[]>;
+  }): Promise<{data: IUser[], totalPage: number}>;
   findUserById(id: string): Promise<IUser | null>;
   changeAvatar(id: string, file: Express.Multer.File): Promise<string>;
   updateUserById({

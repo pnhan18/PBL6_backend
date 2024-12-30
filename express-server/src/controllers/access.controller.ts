@@ -3,6 +3,7 @@ import AccessService from "../services/access.service";
 import { CREATED, OK } from "../core/success.response";
 import { Request, Response, NextFunction } from "express";
 import { IAccessService } from "../services/interfaces/Iaccess.service";
+import { result } from "lodash";
 
 export class AccessController {
   private accessService: IAccessService;
@@ -17,6 +18,13 @@ export class AccessController {
 
   logIn = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     new OK("Login successfully", await this.accessService.logIn(req.body)).send(
+      res
+    );
+  }
+
+  logInWithGoogle = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    const result = req.user;
+    new OK("Login successfully", result).send(
       res
     );
   }

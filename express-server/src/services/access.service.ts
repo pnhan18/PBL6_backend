@@ -65,19 +65,28 @@ export class AccessService implements IAccessService {
   async loginWithGoogle({
     email,
     username,
+    avatar,
+    googleId
   }: {
     email: string;
     username: string;
+    avatar: string;
+    googleId: string;
   }) {
     let holder = await this.userRepository.findByEmail({ email });
-    if (!holder) {
+    if(!holder) {
       holder = await this.userRepository.save({
-        email,
         username,
-        password: "",
+        email,
+        googleId,
+        avatar,
+        createdAt: new Date(),
       });
     }
-    const user_id = holder._id;
+    if(!holder.googleId) {
+      holder = await this.userRepository.update(new ObjectId(holder._id), { googleId });
+    }
+    const user_id = holder!._id;
     let refreshToken = await this.redisService.get(`refreshToken:${user_id}`);
     let accessToken;
     if (!refreshToken) {
@@ -85,8 +94,8 @@ export class AccessService implements IAccessService {
     }
     accessToken = Authentication.generateAccessToken(
       user_id,
-      holder.role,
-      holder.username,
+      holder!.role,
+      holder!.username,
       email
     );
     // save refreshToken to redis
@@ -96,7 +105,7 @@ export class AccessService implements IAccessService {
       120 * 24 * 60 * 60
     );
     return {
-      user: getInforData(holder, [
+      user: getInforData(holder!, [
         "_id",
         "email",
         "avatar",
@@ -117,7 +126,7 @@ export class AccessService implements IAccessService {
       throw new BadRequestError("Invalid email or password");
     }
 
-    const isMatch = await bcrypt.compare(password, holder.password);
+    const isMatch = await bcrypt.compare(password, holder.password!);
     if (!isMatch) {
       throw new BadRequestError("Invalid email or password");
     }
@@ -179,7 +188,7 @@ export class AccessService implements IAccessService {
     }
     const isMatch = await Authentication.passwordCompare(
       oldPassword,
-      holder.password
+      holder.password!
     );
     if (!isMatch) {
       throw new BadRequestError("Invalid password");

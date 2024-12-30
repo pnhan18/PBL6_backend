@@ -26,4 +26,17 @@ export class UserRepository
       .select(selectData(field))
       .lean()) as IUser | null;
   }
+
+  async findByGoogleId({
+    googleId,
+    field = [],
+  }: {
+    googleId: string;
+    field?: string[];
+  }): Promise<IUser | null> {
+    return (await this.model
+      .findOne({ googleId })
+      .select(selectData(field))
+      .lean()) as IUser | null;
+  }
 }

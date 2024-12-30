@@ -28,7 +28,7 @@ export class BaseRepository<T, ID extends Types.ObjectId>
     page: number;
     filter: Record<string, any>;
     select: string[];
-  }): Promise<T[]> {
+  }): Promise<{totalPage: number, data: T[]}> {
     const skip = (page - 1) * limit;
     const query: Record<string, any> = {};
     for (const key in filter) {
@@ -41,12 +41,14 @@ export class BaseRepository<T, ID extends Types.ObjectId>
         }
       }
     }
-    return (await this.model
+    const data =  (await this.model
       .find(query)
       .select(selectData(select))
       .limit(limit)
       .skip(skip)
       .lean()) as T[];
+    const totalPage = Math.ceil((await this.model.countDocuments(query)) / limit);
+    return { totalPage, data };
   }
 
   async save(entity: Partial<T>): Promise<T> {
